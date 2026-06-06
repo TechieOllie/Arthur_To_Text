@@ -1,0 +1,3 @@
+discord.py[voice]
+faster-whisper
+python-dotenv
