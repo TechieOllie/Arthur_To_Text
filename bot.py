@@ -1,12 +1,14 @@
 import sys
 
-# Force tqdm progress bars in Docker (non-TTY environment)
 if not sys.stdout.isatty():
     sys.stdout.isatty = lambda: True
 
+import asyncio
 import os
 import subprocess
 import tempfile
+from dataclasses import dataclass
+from functools import partial
 
 import discord
 from dotenv import load_dotenv
@@ -25,11 +27,41 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = discord.Client(intents=intents)
+queue = asyncio.Queue()
+
+
+@dataclass
+class TranscriptionJob:
+    message: discord.Message
+    ogg_path: str
+    wav_path: str
+
+
+async def process_queue():
+    while True:
+        job = await queue.get()
+        async with job.message.channel.typing():
+            try:
+                transcribe = partial(
+                    model.transcribe,
+                    job.wav_path,
+                    language="fr",
+                    beam_size=15,
+                    vad_filter=True,
+                )
+                segments, _ = await asyncio.to_thread(transcribe)
+                text = "".join(seg.text for seg in segments)
+                await job.message.reply(f"📝 **Transcription:** {text}")
+            finally:
+                os.unlink(job.ogg_path)
+                os.unlink(job.wav_path)
+                queue.task_done()
 
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+    bot.loop.create_task(process_queue())
 
 
 @bot.event
@@ -39,38 +71,19 @@ async def on_message(message):
 
     for attachment in message.attachments:
         if attachment.content_type and "audio" in attachment.content_type:
-            async with message.channel.typing():
-                audio_bytes = await attachment.read()
+            audio_bytes = await attachment.read()
 
-                with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
-                    f.write(audio_bytes)
-                    ogg_path = f.name
+            with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as f:
+                f.write(audio_bytes)
+                ogg_path = f.name
 
-                wav_path = ogg_path.replace(".ogg", ".wav")
-                subprocess.run(
-                    [
-                        "ffmpeg",
-                        "-i",
-                        ogg_path,
-                        "-ar",
-                        "16000",
-                        "-ac",
-                        "1",
-                        wav_path,
-                        "-y",
-                    ],
-                    capture_output=True,
-                )
+            wav_path = ogg_path.replace(".ogg", ".wav")
+            subprocess.run(
+                ["ffmpeg", "-i", ogg_path, "-ar", "16000", "-ac", "1", wav_path, "-y"],
+                capture_output=True,
+            )
 
-                segments, _ = model.transcribe(
-                    wav_path, language="fr", beam_size=15, vad_filter=True
-                )
-                text = "".join(seg.text for seg in segments)
-
-                os.unlink(ogg_path)
-                os.unlink(wav_path)
-
-                await message.reply(f"📝 **Transcription:** {text}")
+            await queue.put(TranscriptionJob(message, ogg_path, wav_path))
             break
 
 
