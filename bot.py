@@ -1,12 +1,14 @@
 import sys
+
 # Force tqdm progress bars in Docker (non-TTY environment)
 if not sys.stdout.isatty():
     sys.stdout.isatty = lambda: True
 
-import discord
 import os
 import subprocess
 import tempfile
+
+import discord
 from dotenv import load_dotenv
 from faster_whisper import WhisperModel
 
@@ -46,12 +48,22 @@ async def on_message(message):
 
                 wav_path = ogg_path.replace(".ogg", ".wav")
                 subprocess.run(
-                    ["ffmpeg", "-i", ogg_path, "-ar", "16000", "-ac", "1", wav_path, "-y"],
+                    [
+                        "ffmpeg",
+                        "-i",
+                        ogg_path,
+                        "-ar",
+                        "16000",
+                        "-ac",
+                        "1",
+                        wav_path,
+                        "-y",
+                    ],
                     capture_output=True,
                 )
 
                 segments, _ = model.transcribe(
-                    wav_path, language="fr", beam_size=10, vad_filter=True
+                    wav_path, language="fr", beam_size=15, vad_filter=True
                 )
                 text = "".join(seg.text for seg in segments)
 
