@@ -1,0 +1,18 @@
+[project]
+name = "arthur-to-text"
+version = "0.1.0"
+description = "Discord bot that replies to voice messages with their transcription (faster-whisper)"
+requires-python = ">=3.14"
+dependencies = [
+    "discord.py>=2.6",
+    "faster-whisper>=1.1",
+    # faster-whisper 1.2.1 passes av.open(metadata_errors=...), which PyAV 19
+    # removed. Drop this once a faster-whisper release handles it.
+    "av<19",
+]
+
+# No [build-system]: uv treats this as an application, installing only the
+# dependencies; the code runs from the checkout with `python -m bot`.
+
+[tool.ruff.lint]
+extend-select = ["I", "B", "UP", "ASYNC"]

@@ -1,10 +1,11 @@
 services:
   bot:
+    # Built here for local runs; the server pulls the image CI publishes
+    # (ghcr.io/techieollie/arthur_to_text, see DockerComposeFiles).
     build: .
     env_file: .env
-    environment:
-      - PYTHONUNBUFFERED=1
     volumes:
+      # Whisper models, downloaded on first start.
       - whisper-models:/root/.cache
     restart: unless-stopped
 
